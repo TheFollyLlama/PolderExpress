@@ -51,6 +51,7 @@ class PlaneSerializer(serializers.Serializer):
     squawk = serializers.CharField(allow_null=True)
     emergency = serializers.CharField()
     liveatc_stream_url = serializers.CharField(allow_null=True)
+    liveatc_frequency = serializers.CharField(allow_null=True)
     route = RouteSerializer(allow_null=True, required=False)
 
 

@@ -91,8 +91,8 @@ When no route is available adsbdb returns `{"response": "No flightroute found"}`
 | `aircraft_type`      | string \| null| `t`                       | ICAO aircraft type code                      |
 | `squawk`             | string \| null| `squawk`                  | Transponder squawk code                      |
 | `emergency`          | string        | `emergency`               | Emergency status (`"none"` if normal)        |
-| `liveatc_stream_url` | string \| null| *(computed)*              | LiveATC MP3 stream URL for nearest feed      |
-| `liveatc_frequency`  | string \| null| *(not emitted)*           | Reserved. The backend does **not** currently emit this field. The frontend player renders `plane.liveatc_frequency` whenever a response includes it and drops the freq text otherwise. |
+| `liveatc_stream_url` | string \| null| *(computed)*              | LiveATC MP3 stream URL. Inside Amsterdam ACC coverage (`_ams_atc_layer` in `tracker/services.py`) this is the layer's stream — delivery/ground near EHAM, tower, TMA app/dep, the nearest-live ACC radar feed (`eham_rdr_sw`) for the five sectors and the night band-box, or MUAC. Outside coverage it's the generic nearest-feed URL from `find_atc_feed`. |
+| `liveatc_frequency`  | string \| null| *(computed)*              | Controller frequency in MHz for the resolved ACC layer: delivery `121.980`, ground `121.705`, tower `135.110`, TMA departure `121.205` / arrival `119.055`, ACC sectors north `119.175` / east `124.875` / south `123.850` / south-west `125.750` / north-west `123.700`, night band-box `124.300`, MUAC `135.510`; `null` outside Amsterdam coverage. The frontend player renders `plane.liveatc_frequency` whenever a response includes it and drops the freq text otherwise. |
 | `route`             | object \| null| *(adsbdb)*                | Flattened flight route (see below)           |
 | `fetched_at`         | datetime      | *(server-side)*           | ISO 8601 timestamp of the fetch              |
 
@@ -356,6 +356,7 @@ The `feed` object mirrors the `liveatc_stream_url` selection output: `name`, `ki
 | `lat`, `lon`         | *(not exposed)*      | used for Haversine only       |
 | `dst`                | *(not used)*         | recomputed server-side        |
 | `dir`                | `bearing`            | recomputed server-side        |
+| *(computed)*         | `liveatc_frequency`  | Frequency for the resolved Amsterdam ACC layer (via `_ams_atc_layer` in `tracker/services.py`): delivery/ground/tower/TMA/ACC sector/night band-box/MUAC as above; `null` outside coverage. Only emitted when a stream resolves at all. |
 
 ### adsbdb route → internal (`route.*`)
 

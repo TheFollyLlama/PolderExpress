@@ -72,6 +72,7 @@ To repoint to a new airport:
 - Add feed entries with the airport's lat/lon and the appropriate `kind`: `ground`, `tower`, `appdep` (departure or approach), or `center` (area control).
 - Keep at least one `center` feed, or the "everything is a fallback" behavior described in `adsb_contract.md` breaks (a feed is always expected when lat/lon is present).
 - If you don't want the Atlanta fallback either, delete those four KATL entries.
+- The Amsterdam ACC layer resolver (`_ams_atc_layer` + `AMS_*` constants in `tracker/services.py`) is Amsterdam-specific too — it maps positions by altitude/distance-from-EHAM to delivery, ground, tower, TMA app/dep, the five radar sectors (+ 124.300 night band-box), and MUAC, emitting `liveatc_frequency` and the nearest-live `liveatc_stream_url`. Retune or remove these constants/helpers and the `tracker/serializers.py` `liveatc_frequency` wiring when repointing elsewhere.
 
 Kind priority (`ground` → `tower` → `appdep` → `center`, `atc.py:8`) means overlapping feeds resolve most-specific-first, ties by distance.
 

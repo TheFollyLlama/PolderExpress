@@ -60,3 +60,39 @@ docker compose run --rm web pip install --quiet ruff && docker compose run --rm 
 ```
 
 `ruff` flags unused imports, non-snake-case names, and undefined names; fix everything it reports before pushing.
+
+---
+
+# Frontend Style Guide (HTML / CSS / vanilla JS)
+
+The frontend is server-rendered Django templates + vanilla ES modules, no build step. If the code is structured cleanly, the CSS stays clean — structure the markup and JavaScript so styling falls out naturally.
+
+## 7. File layout
+
+- **One ES module per page**, loaded from the template: `tracker/static/tracker/<page>.js` via `<script type="module" src="{% static 'tracker/<page>.js' %}">`.
+- **Shared logic goes in `tracker/static/tracker/shared.js`** only when used by 2+ pages: DOM helpers, formatters, escaping, the player, geolocation. Page-specific logic (renderers, polling, the proximity gradient) stays in the page module.
+- **No inline `<script>` blocks in templates** for logic — templates carry only markup. (Exceptions: page config like API URLs can live at the top of the page module's constants.)
+- **No inline `style="..."` attributes** in markup or generated HTML unless there is no alternative; prefer classes and CSS custom properties.
+
+## 8. Naming
+
+- **HTML**: `kebab-case` class/id names (`closest-body`, `player-bar`, `refresh-btn`).
+- **CSS**: design tokens as custom properties on `:root` (`--bg`, `--surface`, `--accent`, `--border`, `--radius`); class names mirror the markup. No element-type selectors for theming beyond `body`/`header` defaults.
+- **JS**: `camelCase` for variables and functions (`renderClosest`, `applyProximityBackground`), `SCREAMING_SNAKE_CASE` for constants (`REFRESH_MS`, `GREEN_START_KM`). Prefer `const` over `let`; never `var`.
+- **DOM ids**: stable, unique per page (`#closest-body`, `#player-bar`, `#icon-play`).
+
+## 9. Embedding content (security)
+
+- **Never interpolate raw API data into HTML.** Every string rendered from a plane/route/photo object must pass `escapeHtml()` — including callsign, airline, route, and photographer fields.
+- Attribute values (e.g. `href`, `src`) built from API data also go through `escapeHtml()`.
+
+## 10. Player & shared patterns
+
+- The shared `createPlayer()` factory owns all `<audio>` state (play/pause icons, volume persistence via `localStorage['atc-volume']`, dismissal). Pages call `open()/play()/pause()/stop()` and subscribe with `onChange()` — never touch the `<audio>` element directly.
+- State that needs to re-render the page (active callsign, streaming state) is exposed by the player and read in the renderer, or via `onChange` callbacks — the render function stays a pure function of its inputs.
+
+## 11. CSS responsibilities
+
+- Animatable state lives in CSS custom properties (e.g. `@property --proximity-glow`) so effects can transition without per-frame JS.
+- Color values that shift programmatically are computed once in JS (hex → rgb) or via `rgba()` with the custom property — keep the multiplier/token values as named constants in the page module, not magic numbers in markup.
+- Keep styling out of JS: generated HTML uses semantic class names; all presentation lives in `style.css`.
