@@ -16,6 +16,46 @@ LIVEATC_TOWER = feed_stream_url("katl_twr")
 LIVEATC_APPROACH = feed_stream_url("katl_app_fin_a")
 LIVEATC_CENTER = feed_stream_url("katl_ztl22")
 
+EHAM_LAT = 52.3086
+EHAM_LON = 4.7639
+KM_PER_NM = 1.852
+
+AMS_ACC_NORTH_BAND_LAT = 52.85
+AMS_GROUND_RADIUS_NM = 3.0
+AMS_TOWER_RADIUS_NM = 6.0
+AMS_TMA_RADIUS_NM = 35.0
+AMS_ACC_RADIUS_NM = 150.0
+AMS_MUAC_RADIUS_NM = 200.0
+AMS_TOWER_MAX_ALT_FT = 2500
+AMS_TMA_MAX_ALT_FT = 9500
+AMS_ACC_MAX_ALT_FT = 24500
+AMS_NIGHT_START_HOUR_UTC = 22
+AMS_NIGHT_END_HOUR_UTC = 5
+
+AMS_DELIVERY_STREAM = feed_stream_url("eham_del")
+AMS_GROUND_STREAM = feed_stream_url("eham_gnd_0624")
+AMS_TOWER_STREAM = feed_stream_url("eham_twr_0624")
+AMS_DEPARTURE_STREAM = feed_stream_url("eham_app_121205")
+AMS_APPROACH_STREAM = feed_stream_url("eham_app_119055")
+AMS_ACC_STREAM = feed_stream_url("eham_rdr_sw")
+AMS_MUAC_STREAM = feed_stream_url("eham_muac_135510")
+
+AMS_DELIVERY_FREQ_MHZ = "121.980"
+AMS_GROUND_FREQ_MHZ = "121.705"
+AMS_TOWER_FREQ_MHZ = "135.110"
+AMS_DEPARTURE_FREQ_MHZ = "121.205"
+AMS_APPROACH_FREQ_MHZ = "119.055"
+AMS_MUAC_FREQ_MHZ = "135.510"
+AMS_NIGHT_FREQ_MHZ = "124.300"
+
+AMS_SECTOR_FREQS = {
+    "north": "119.175",
+    "east": "124.875",
+    "south": "123.850",
+    "southwest": "125.750",
+    "northwest": "123.700",
+}
+
 ROUTE_CACHE_TTL_SECONDS = 6 * 60 * 60
 ROUTE_NEGATIVE_CACHE_TTL_SECONDS = 5 * 60
 
@@ -227,7 +267,7 @@ def _parse_photo(photo):
     }
 
 
-def _parse_ac(ac, user_lat, user_lon):
+def _parse_ac(ac, user_lat, user_lon, now=None):
     plane_lat = ac.get("lat")
     plane_lon = ac.get("lon")
 
@@ -244,6 +284,15 @@ def _parse_ac(ac, user_lat, user_lon):
         except (TypeError, ValueError):
             altitude_ft = None
 
+    atc_layer = _ams_atc_layer(
+        plane_lat,
+        plane_lon,
+        altitude_ft,
+        ground_speed_knots=ac.get("gs"),
+        vertical_rate_fpm=ac.get("baro_rate"),
+        now=now,
+    )
+
     return {
         "callsign": (ac.get("flight") or "").strip(),
         "tail_number": ac.get("r"),
@@ -259,8 +308,95 @@ def _parse_ac(ac, user_lat, user_lon):
         "squawk": ac.get("squawk"),
         "emergency": ac.get("emergency", "none"),
         "liveatc_stream_url": (
-            get_liveatc_url(plane_lat, plane_lon, altitude_ft)
-            if plane_lat is not None and plane_lon is not None
-            else None
+            atc_layer["stream_url"]
+            if atc_layer is not None
+            else get_liveatc_url(plane_lat, plane_lon, altitude_ft)
         ),
+        "liveatc_frequency": atc_layer["frequency"] if atc_layer is not None else None,
     }
+
+
+def _ams_atc_layer(
+    lat,
+    lon,
+    altitude_ft,
+    ground_speed_knots=None,
+    vertical_rate_fpm=None,
+    now=None,
+):
+    """Stream and frequency for the Amsterdam ACC layer covering a position.
+
+    Layered by altitude and distance from EHAM: ground ops (delivery when
+    slow, else ground) on the airfield, tower within 6 nm, TMA app/dep within
+    35 nm, ACC radar sectors within 150 nm (night band-box merged), then MUAC.
+    ACC sectors without a live feed fall back to the nearest live Amsterdam
+    radar stream (eham_rdr_sw). Returns None outside AMS coverage.
+    """
+    dist_nm = _ams_distance_nm(lat, lon)
+
+    if altitude_ft == "ground":
+        if dist_nm is None or dist_nm >= AMS_GROUND_RADIUS_NM:
+            return None
+        if ground_speed_knots is not None and ground_speed_knots < 5:
+            return {"stream_url": AMS_DELIVERY_STREAM, "frequency": AMS_DELIVERY_FREQ_MHZ}
+        return {"stream_url": AMS_GROUND_STREAM, "frequency": AMS_GROUND_FREQ_MHZ}
+
+    if not isinstance(altitude_ft, (int, float)) or altitude_ft <= 0:
+        return None
+
+    if dist_nm is not None and dist_nm <= AMS_TOWER_RADIUS_NM and altitude_ft <= AMS_TOWER_MAX_ALT_FT:
+        return {"stream_url": AMS_TOWER_STREAM, "frequency": AMS_TOWER_FREQ_MHZ}
+
+    if (
+        dist_nm is not None
+        and dist_nm <= AMS_TMA_RADIUS_NM
+        and AMS_TOWER_MAX_ALT_FT < altitude_ft <= AMS_TMA_MAX_ALT_FT
+    ):
+        if vertical_rate_fpm is not None and vertical_rate_fpm > 300:
+            return {
+                "stream_url": AMS_DEPARTURE_STREAM,
+                "frequency": AMS_DEPARTURE_FREQ_MHZ,
+            }
+        return {"stream_url": AMS_APPROACH_STREAM, "frequency": AMS_APPROACH_FREQ_MHZ}
+
+    if (
+        dist_nm is not None
+        and dist_nm <= AMS_ACC_RADIUS_NM
+        and AMS_TMA_MAX_ALT_FT < altitude_ft <= AMS_ACC_MAX_ALT_FT
+    ):
+        if is_night_bandbox_active(now):
+            return {"stream_url": AMS_ACC_STREAM, "frequency": AMS_NIGHT_FREQ_MHZ}
+        freq = AMS_SECTOR_FREQS[_ams_acc_sector_key(lat, lon)]
+        return {"stream_url": AMS_ACC_STREAM, "frequency": freq}
+
+    if (
+        dist_nm is not None
+        and dist_nm <= AMS_MUAC_RADIUS_NM
+        and altitude_ft > AMS_ACC_MAX_ALT_FT
+    ):
+        return {"stream_url": AMS_MUAC_STREAM, "frequency": AMS_MUAC_FREQ_MHZ}
+
+    return None
+
+
+def is_night_bandbox_active(now=None):
+    """True when Amsterdam ACC sectors are merged into the 124.300 band-box."""
+    if now is None:
+        now = datetime.now(timezone.utc)
+    return now.hour >= AMS_NIGHT_START_HOUR_UTC or now.hour < AMS_NIGHT_END_HOUR_UTC
+
+
+def _ams_distance_nm(lat, lon):
+    """Distance from Schiphol (EHAM) in nautical miles, or None."""
+    if lat is None or lon is None:
+        return None
+    return haversine(EHAM_LAT, EHAM_LON, lat, lon) / KM_PER_NM
+
+
+def _ams_acc_sector_key(lat, lon):
+    """Amsterdam ACC sector name by position when the North band does not apply."""
+    if lat > AMS_ACC_NORTH_BAND_LAT:
+        return "north"
+    if lon < EHAM_LON:
+        return "northwest" if lat > EHAM_LAT else "southwest"
+    return "east" if lat > EHAM_LAT else "south"

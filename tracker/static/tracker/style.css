@@ -1,3 +1,9 @@
+@property --proximity-glow {
+  syntax: '<number>';
+  inherits: true;
+  initial-value: 0;
+}
+
 :root {
   --bg: #0b0e14;
   --surface: #141820;
@@ -15,11 +21,19 @@
 * { box-sizing: border-box; margin: 0; padding: 0; }
 body {
   font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
-  background: var(--bg);
+  background-color: var(--bg);
+  background-image: radial-gradient(
+    ellipse 90% 75% at 50% 25%,
+    rgba(34, 197, 94, calc(var(--proximity-glow, 0) * 0.6)) 0%,
+    rgba(34, 197, 94, 0) 70%
+  );
+  background-repeat: no-repeat;
+  background-attachment: fixed;
   color: var(--text);
   min-height: 100dvh;
   padding-bottom: calc(72px + var(--safe-bottom));
   -webkit-font-smoothing: antialiased;
+  transition: --proximity-glow 1.2s ease;
 }
 
 header {

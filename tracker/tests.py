@@ -1,3 +1,4 @@
+from datetime import datetime, timezone
 from typing import ClassVar
 from unittest import mock
 
@@ -11,12 +12,22 @@ from tracker import services
 from tracker.atc import feed_stream_url, find_atc_feed
 from tracker.serializers import PlanePhotoResponseSerializer, PlaneSerializer
 from tracker.services import (
+    AMS_ACC_STREAM,
+    AMS_APPROACH_STREAM,
+    AMS_DELIVERY_STREAM,
+    AMS_DEPARTURE_STREAM,
+    AMS_GROUND_STREAM,
+    AMS_MUAC_STREAM,
+    AMS_NIGHT_FREQ_MHZ,
+    AMS_SECTOR_FREQS,
+    AMS_TOWER_STREAM,
     LIVEATC_APPROACH,
     LIVEATC_CENTER,
     LIVEATC_GROUND,
     LIVEATC_TOWER,
     UpstreamTimeoutError,
     UpstreamUnavailableError,
+    _ams_atc_layer,
     _parse_ac,
     _parse_photo,
     _parse_route,
@@ -27,6 +38,7 @@ from tracker.services import (
     fetch_route,
     get_liveatc_url,
     haversine,
+    is_night_bandbox_active,
 )
 from tracker.views import (
     ClosestPlaneView,
@@ -292,6 +304,148 @@ class PlaneAtcViewTests(TestCase):
     def test_post_not_allowed(self):
         response = self.client.post(self.url)
         self.assertIn(response.status_code, (status.HTTP_405_METHOD_NOT_ALLOWED,))
+
+
+class IsNightBandboxActiveTests(TestCase):
+    def test_night_hours_active(self):
+        self.assertTrue(is_night_bandbox_active(datetime(2026, 1, 15, 23, 0, tzinfo=timezone.utc)))
+
+    def test_morning_hours_active(self):
+        self.assertTrue(is_night_bandbox_active(datetime(2026, 1, 15, 3, 0, tzinfo=timezone.utc)))
+
+    def test_day_hours_inactive(self):
+        self.assertFalse(is_night_bandbox_active(datetime(2026, 1, 15, 12, 0, tzinfo=timezone.utc)))
+
+    def test_boundary_start_inactive(self):
+        self.assertFalse(is_night_bandbox_active(datetime(2026, 1, 15, 21, 59, tzinfo=timezone.utc)))
+
+    def test_boundary_end_active(self):
+        self.assertTrue(is_night_bandbox_active(datetime(2026, 1, 15, 4, 59, tzinfo=timezone.utc)))
+
+
+class AmsAtcLayerTests(TestCase):
+    DAY = datetime(2026, 1, 15, 12, 0, tzinfo=timezone.utc)
+    NIGHT = datetime(2026, 1, 15, 23, 0, tzinfo=timezone.utc)
+
+    def _layer(self, lat, lon, altitude_ft, **kwargs):
+        return _ams_atc_layer(lat, lon, altitude_ft, **kwargs)
+
+    def test_ground_slow_aircraft_uses_delivery(self):
+        layer = self._layer(52.3086, 4.7639, "ground", ground_speed_knots=3)
+        self.assertEqual(layer["stream_url"], AMS_DELIVERY_STREAM)
+        self.assertEqual(layer["frequency"], "121.980")
+
+    def test_ground_moving_aircraft_uses_ground(self):
+        layer = self._layer(52.3086, 4.7639, "ground", ground_speed_knots=20)
+        self.assertEqual(layer["stream_url"], AMS_GROUND_STREAM)
+        self.assertEqual(layer["frequency"], "121.705")
+
+    def test_ground_beyond_radius_returns_none(self):
+        self.assertIsNone(self._layer(52.6, 4.9, "ground", ground_speed_knots=20))
+
+    def test_tower_band_uses_tower(self):
+        layer = self._layer(52.309, 4.764, 1200)
+        self.assertEqual(layer["stream_url"], AMS_TOWER_STREAM)
+        self.assertEqual(layer["frequency"], "135.110")
+
+    def test_above_tower_ceiling_uses_tma_approach(self):
+        layer = self._layer(52.309, 4.764, 3000)
+        self.assertEqual(layer["stream_url"], AMS_APPROACH_STREAM)
+        self.assertEqual(layer["frequency"], "119.055")
+
+    def test_tma_departure_uses_departure_stream(self):
+        layer = self._layer(52.35, 4.85, 5000, vertical_rate_fpm=1500)
+        self.assertEqual(layer["stream_url"], AMS_DEPARTURE_STREAM)
+        self.assertEqual(layer["frequency"], "121.205")
+
+    def test_tma_arrival_uses_approach_stream(self):
+        layer = self._layer(52.35, 4.85, 5000, vertical_rate_fpm=-500)
+        self.assertEqual(layer["stream_url"], AMS_APPROACH_STREAM)
+        self.assertEqual(layer["frequency"], "119.055")
+
+    def test_acc_day_south_west_sector(self):
+        layer = self._layer(52.0, 4.2, 12000, now=self.DAY)
+        self.assertEqual(layer["stream_url"], AMS_ACC_STREAM)
+        self.assertEqual(layer["frequency"], AMS_SECTOR_FREQS["southwest"])
+
+    def test_acc_day_north_west_sector(self):
+        layer = self._layer(52.6, 4.2, 12000, now=self.DAY)
+        self.assertEqual(layer["frequency"], AMS_SECTOR_FREQS["northwest"])
+
+    def test_acc_day_south_sector(self):
+        layer = self._layer(52.0, 5.2, 12000, now=self.DAY)
+        self.assertEqual(layer["frequency"], AMS_SECTOR_FREQS["south"])
+
+    def test_acc_day_east_sector(self):
+        layer = self._layer(52.6, 5.2, 12000, now=self.DAY)
+        self.assertEqual(layer["frequency"], AMS_SECTOR_FREQS["east"])
+
+    def test_acc_day_north_band_uses_sector_one(self):
+        layer = self._layer(53.0, 5.0, 12000, now=self.DAY)
+        self.assertEqual(layer["frequency"], AMS_SECTOR_FREQS["north"])
+
+    def test_acc_night_uses_bandbox_frequency(self):
+        layer = self._layer(52.0, 4.2, 12000, now=self.NIGHT)
+        self.assertEqual(layer["stream_url"], AMS_ACC_STREAM)
+        self.assertEqual(layer["frequency"], AMS_NIGHT_FREQ_MHZ)
+
+    def test_acc_altitude_lower_bound_inclusive(self):
+        layer = self._layer(52.0, 4.2, 9501, now=self.DAY)
+        self.assertEqual(layer["frequency"], AMS_SECTOR_FREQS["southwest"])
+
+    def test_acc_altitude_upper_bound_inclusive(self):
+        layer = self._layer(52.0, 4.2, 24500, now=self.DAY)
+        self.assertEqual(layer["frequency"], AMS_SECTOR_FREQS["southwest"])
+
+    def test_acc_altitude_below_band_uses_tma(self):
+        layer = self._layer(52.0, 4.2, 9499, now=self.DAY)
+        self.assertEqual(layer["stream_url"], AMS_APPROACH_STREAM)
+
+    def test_muac_above_acc_ceiling(self):
+        layer = self._layer(50.9, 5.7, 30000)
+        self.assertEqual(layer["stream_url"], AMS_MUAC_STREAM)
+        self.assertEqual(layer["frequency"], "135.510")
+
+    def test_ground_altitude_returns_none(self):
+        self.assertIsNone(self._layer(52.2, 4.8, "ground"))
+
+    def test_missing_altitude_returns_none(self):
+        self.assertIsNone(self._layer(52.0, 4.2, None))
+
+    def test_missing_position_returns_none(self):
+        self.assertIsNone(self._layer(None, None, 12000))
+
+    def test_out_of_coverage_returns_none(self):
+        self.assertIsNone(self._layer(40.0, -100.0, 30000))
+
+
+class AmsAtcLayerParseTests(TestCase):
+    DAY = datetime(2026, 1, 15, 12, 0, tzinfo=timezone.utc)
+
+    def test_parse_ac_assigns_sector_stream_and_frequency(self):
+        parsed = _parse_ac(
+            {"hex": "abc123", "lat": 52.0, "lon": 4.2, "alt_baro": 12000},
+            52.3086,
+            4.7639,
+            now=self.DAY,
+        )
+        self.assertEqual(parsed["liveatc_frequency"], AMS_SECTOR_FREQS["southwest"])
+        self.assertEqual(parsed["liveatc_stream_url"], AMS_ACC_STREAM)
+
+    def test_parse_ac_outside_ams_keeps_appdep_stream(self):
+        parsed = _parse_ac(
+            {"hex": "abc123", "lat": 52.8, "lon": 12.0, "alt_baro": 12000},
+            52.3086,
+            4.7639,
+            now=self.DAY,
+        )
+        self.assertIsNone(parsed["liveatc_frequency"])
+        self.assertNotEqual(parsed["liveatc_stream_url"], AMS_ACC_STREAM)
+
+    def test_parse_ac_no_position_has_no_stream_or_frequency(self):
+        parsed = _parse_ac({"hex": "abc123"}, 52.3086, 4.7639)
+        self.assertIsNone(parsed["liveatc_frequency"])
+        self.assertIsNone(parsed["liveatc_stream_url"])
 
 
 class ParseAcTests(TestCase):
@@ -963,6 +1117,12 @@ class RouteSerializationTests(TestCase):
     def test_plane_serializer_null_route(self):
         serialized = PlaneSerializer(self._plane_data(None)).data
         self.assertIsNone(serialized["route"])
+
+    def test_plane_serializer_liveatc_frequency(self):
+        data = self._plane_data(None)
+        data["liveatc_frequency"] = "125.750"
+        serialized = PlaneSerializer(data).data
+        self.assertEqual(serialized["liveatc_frequency"], "125.750")
 
 
 class PhotoParseTests(TestCase):
