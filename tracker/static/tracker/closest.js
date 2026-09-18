@@ -11,12 +11,15 @@ const PHOTO_REFRESH_MS = 5 * 60 * 1000;
 const RADIUS_KM = 15;
 const GREEN_START_KM = 8;
 const GREEN_FULL_KM = 1.5;
+const MAP_URL = 'https://adsb.lol/?kiosk&hideSideBar&enableLabels&';
+const MAP_ZOOM = 12;
 
 const bodyEl = $('#closest-body');
 const photoEl = $('#closest-photo');
 const statusEl = $('#status');
 const statusText = $('#status-text');
 const refreshBtn = $('#refresh-btn');
+const mapFrame = $('#map-frame');
 
 const player = createPlayer();
 
@@ -25,6 +28,11 @@ let userLon = null;
 let refreshTimer = null;
 let lastPhotoHex = null;
 let lastPhotoAt = 0;
+let mapCentered = false;
+
+function centerMap(lat, lon) {
+  mapFrame.src = MAP_URL + 'lat=' + lat + '&lon=' + lon + '&zoom=' + MAP_ZOOM;
+}
 
 function applyProximityBackground(distanceKm) {
   var t = 0;
@@ -155,6 +163,10 @@ requestLocation({
     userLat = pos.coords.latitude;
     userLon = pos.coords.longitude;
     setStatus(statusEl, statusText, '', 'Located');
+    if (!mapCentered) {
+      centerMap(userLat, userLon);
+      mapCentered = true;
+    }
     fetchClosest();
     if (!refreshTimer) {
       refreshTimer = setInterval(function () {

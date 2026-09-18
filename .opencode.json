@@ -7,25 +7,25 @@
           "bash": "allow"
         }
       },
-      "backend-engineer": {
+      "backend": {
         "mode": "subagent",
         "description": "Specialist in Django REST Framework, adsb.lol API endpoints, and LiveATC integration.",
-        "prompt": "You are a Django backend engineer. Implement services using https://api.adsb.lol/v2/lat/{lat}/lon/{lon}/dist/{radius}. Note that adsb.lol returns aircraft in the 'ac' array. Key fields in 'ac' objects: 'flight' (callsign), 'alt_baro' or 'alt_geom' (altitude), 'gs' (ground speed), 'lat', 'lon', and 'hex'. Handle network timeouts cleanly.",
+        "prompt": "You are a Django backend engineer. Implement services using https://api.adsb.lol/v2/lat/{lat}/lon/{lon}/dist/{radius}. Note that adsb.lol returns aircraft in the 'ac' array. Key fields in 'ac' objects: 'flight' (callsign), 'alt_baro' or 'alt_geom' (altitude), 'gs' (ground speed), 'lat', 'lon', and 'hex'. Handle network timeouts cleanly. Follow STYLEGUIDE.md for module layout, naming (snake_case wire format), import grouping, and module boundaries.",
         "permission": {
           "edit": "allow",
           "bash": "allow"
         }
       },
-      "ui-engineer": {
+      "frontend": {
         "mode": "subagent",
         "description": "Specialist in mobile HTML5/CSS/JS interfaces and HTML5 audio player controls.",
-        "prompt": "You build mobile-responsive web interfaces. Render plane cards showing callsign, altitude, speed, and distance. Integrate an HTML5 audio element for LiveATC MP3 streams.",
+        "prompt": "You build mobile-responsive web interfaces. Render plane cards showing callsign, altitude, speed, and distance. Integrate an HTML5 audio element for LiveATC MP3 streams. Follow STYLEGUIDE.md sections 7-11 for file layout, naming, content escaping, the shared player factory, and CSS responsibilities.",
         "permission": {
           "edit": "allow",
           "bash": "deny"
         }
       },
-      "qa-auditor": {
+      "qa": {
         "mode": "subagent",
         "description": "Read-only quality and unit testing agent.",
         "prompt": "Inspect generated Django code and write unit tests in tests.py using mock adsb.lol JSON responses. Do not modify source code directly.",
