@@ -25,16 +25,18 @@
 
 <div class="closest-content">
   <div class="closest-layout">
-    <div id="closest-photo"></div>
+    <div class="closest-side">
+      <div id="closest-photo"></div>
+      <div class="map-wrap">
+        <iframe
+          id="map-frame"
+          class="map-frame"
+          src="https://adsb.lol/?kiosk&hideSideBar&enableLabels&lat=52.3086&lon=4.7639&zoom=11"
+          title="Live aircraft map by adsb.lol"
+          allowfullscreen></iframe>
+      </div>
+    </div>
     <div id="closest-body"></div>
-  </div>
-  <div class="map-wrap">
-    <iframe
-      id="map-frame"
-      class="map-frame"
-      src="https://adsb.lol/?kiosk&hideSideBar&enableLabels&zoom=3"
-      title="Live aircraft map by adsb.lol"
-      allowfullscreen></iframe>
   </div>
 </div>
 

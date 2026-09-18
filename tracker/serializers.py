@@ -40,6 +40,8 @@ class PlaneSerializer(serializers.Serializer):
     callsign = serializers.CharField()
     tail_number = serializers.CharField(allow_null=True)
     hex_id = serializers.CharField()
+    lat = serializers.FloatField(allow_null=True)
+    lon = serializers.FloatField(allow_null=True)
     distance_km = serializers.FloatField(allow_null=True)
     bearing = serializers.FloatField(allow_null=True)
     altitude_ft = serializers.JSONField(allow_null=True)

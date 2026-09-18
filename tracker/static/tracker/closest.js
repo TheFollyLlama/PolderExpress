@@ -1,6 +1,6 @@
 import {
   $, setStatus, escapeHtml, formatAltitude, formatSpeed, formatDistance,
-  formatVertRate, routeHtml, atcFreq, requestLocation, createPlayer
+  formatVertRate, routeHtml, atcFreq, requestLocation, createPlayer, centerMap, MAP_URL
 } from './shared.js';
 import { callsignName } from './callsigns.js';
 
@@ -11,8 +11,7 @@ const PHOTO_REFRESH_MS = 5 * 60 * 1000;
 const RADIUS_KM = 15;
 const GREEN_START_KM = 8;
 const GREEN_FULL_KM = 1.5;
-const MAP_URL = 'https://adsb.lol/?kiosk&hideSideBar&enableLabels&';
-const MAP_ZOOM = 12;
+const MAP_ZOOM = 10;
 
 const bodyEl = $('#closest-body');
 const photoEl = $('#closest-photo');
@@ -29,9 +28,19 @@ let refreshTimer = null;
 let lastPhotoHex = null;
 let lastPhotoAt = 0;
 let mapCentered = false;
+let lastMapHex = null;
 
-function centerMap(lat, lon) {
-  mapFrame.src = MAP_URL + 'lat=' + lat + '&lon=' + lon + '&zoom=' + MAP_ZOOM;
+function highlightPlane(plane) {
+  var hex = plane && plane.hex_id;
+  if (hex === lastMapHex) return;
+  if (!hex) {
+    if (userLat != null && userLon != null) centerMap(mapFrame, userLat, userLon, MAP_ZOOM);
+  } else {
+    var lat = plane.lat != null ? plane.lat : userLat;
+    var lon = plane.lon != null ? plane.lon : userLon;
+    mapFrame.src = MAP_URL + 'lat=' + lat + '&lon=' + lon + '&zoom=' + MAP_ZOOM + '&icao=' + hex + '&noIsolation';
+  }
+  lastMapHex = hex;
 }
 
 function applyProximityBackground(distanceKm) {
@@ -73,9 +82,11 @@ function renderClosest(data, forcePhoto) {
     photoEl.innerHTML = '';
     player.stop();
     applyProximityBackground(null);
+    highlightPlane(null);
     return;
   }
   applyProximityBackground(p.distance_km);
+  highlightPlane(p);
   var meta = [p.tail_number].filter(Boolean).map(escapeHtml).join(' \u00b7 ');
   if (p.squawk) meta += ' \u00b7 Sqwk ' + escapeHtml(p.squawk);
   var freq = atcFreq(p);
@@ -164,7 +175,7 @@ requestLocation({
     userLon = pos.coords.longitude;
     setStatus(statusEl, statusText, '', 'Located');
     if (!mapCentered) {
-      centerMap(userLat, userLon);
+      centerMap(mapFrame, userLat, userLon, MAP_ZOOM);
       mapCentered = true;
     }
     fetchClosest();

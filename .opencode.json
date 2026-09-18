@@ -33,6 +33,15 @@
           "edit": "deny",
           "bash": "deny"
         }
+      },
+      "release": {
+        "mode": "subagent",
+        "description": "Generate Release notes",
+        "prompt": "Compare current changes with origin/main and add releasenotes and squash all into a single descriptive git commit and push.",
+        "permission": {
+          "edit": "allow",
+          "bash": "allow"
+        }
       }
     }
   }

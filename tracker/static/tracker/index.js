@@ -1,17 +1,19 @@
 import {
   $, setStatus, escapeHtml, formatAltitude, formatSpeed, formatDistance,
-  formatVertRate, routeHtml, atcFreq, requestLocation, createPlayer
+  formatVertRate, routeHtml, atcFreq, requestLocation, createPlayer, centerMap
 } from './shared.js';
 
 const API_URL = '/api/v1/nearby-planes/';
 const REFRESH_MS = 15000;
 const RADIUS_KM = 15;
+const MAP_ZOOM = 11;
 
 const planesEl = $('#planes');
 const countEl = $('#count');
 const statusEl = $('#status');
 const statusText = $('#status-text');
 const refreshBtn = $('#refresh-btn');
+const mapFrame = $('#map-frame');
 
 const player = createPlayer();
 
@@ -19,6 +21,7 @@ let userLat = null;
 let userLon = null;
 let refreshTimer = null;
 let planesData = [];
+let mapCentered = false;
 
 player.onChange(function () {
   renderPlanes();
@@ -116,6 +119,10 @@ requestLocation({
     userLat = pos.coords.latitude;
     userLon = pos.coords.longitude;
     setStatus(statusEl, statusText, '', 'Located');
+    if (!mapCentered) {
+      centerMap(mapFrame, userLat, userLon, MAP_ZOOM);
+      mapCentered = true;
+    }
     fetchPlanes();
     if (!refreshTimer) {
       refreshTimer = setInterval(function () {

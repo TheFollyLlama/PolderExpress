@@ -297,6 +297,8 @@ def _parse_ac(ac, user_lat, user_lon, now=None):
         "callsign": (ac.get("flight") or "").strip(),
         "tail_number": ac.get("r"),
         "hex_id": ac.get("hex"),
+        "lat": plane_lat,
+        "lon": plane_lon,
         "distance_km": round(distance_km, 3) if distance_km is not None else None,
         "bearing": round(bearing, 1) if bearing is not None else None,
         "altitude_ft": altitude_ft,

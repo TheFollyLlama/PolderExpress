@@ -81,6 +81,8 @@ When no route is available adsbdb returns `{"response": "No flightroute found"}`
 | `callsign`           | string        | `flight`                  | Trimmed flight callsign                      |
 | `tail_number`        | string \| null| `r`                       | Aircraft registration (tail number)          |
 | `hex_id`             | string        | `hex`                     | ICAO 24-bit transponder address              |
+| `lat`                | float \| null | `lat`                     | Aircraft latitude (WGS84 decimal degrees)    |
+| `lon`                | float \| null | `lon`                     | Aircraft longitude (WGS84 decimal degrees)   |
 | `distance_km`        | float         | `dst`                     | Distance from user in km                     |
 | `bearing`            | float \| null | `dir`                     | Bearing from user in degrees                 |
 | `altitude_ft`        | int \| "ground" | `alt_baro`              | Barometric altitude in feet, or `"ground"`   |
@@ -353,7 +355,7 @@ The `feed` object mirrors the `liveatc_stream_url` selection output: `name`, `ki
 | `baro_rate`          | `vertical_rate_fpm`  | passthrough, nullable         |
 | `squawk`             | `squawk`             | passthrough, nullable         |
 | `emergency`          | `emergency`          | passthrough                   |
-| `lat`, `lon`         | *(not exposed)*      | used for Haversine only       |
+| `lat`, `lon`         | `lat`, `lon`         | passthrough, nullable. Used for Haversine and to center the adsb.lol embed on the plane |
 | `dst`                | *(not used)*         | recomputed server-side        |
 | `dir`                | `bearing`            | recomputed server-side        |
 | *(computed)*         | `liveatc_frequency`  | Frequency for the resolved Amsterdam ACC layer (via `_ams_atc_layer` in `tracker/services.py`): delivery/ground/tower/TMA/ACC sector/night band-box/MUAC as above; `null` outside coverage. Only emitted when a stream resolves at all. |

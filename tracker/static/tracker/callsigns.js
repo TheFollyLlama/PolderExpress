@@ -43,6 +43,7 @@ const CALLSIGNS = {
   SQ: 'Singapore', SIA: 'Singapore',
   SU: 'Aeroflot', AFL: 'Aeroflot',
   SV: 'Saudia', SVA: 'Saudia',
+  TFL: 'Orange', TOM: 'TomJet', TUI: 'TuiJet', TBH: 'Belgian',
   TK: 'Turkish', THY: 'Turkish',
   TP: 'TAP Air', TAP: 'TAP Air',
   TS: 'Air Transat', TSC: 'Air Transat',

@@ -1,5 +1,11 @@
 export const $ = (s) => document.querySelector(s);
 
+export const MAP_URL = 'https://adsb.lol/?kiosk&hideSideBar&enableLabels&';
+
+export function centerMap(mapFrame, lat, lon, zoom) {
+  mapFrame.src = MAP_URL + 'lat=' + lat + '&lon=' + lon + '&zoom=' + zoom;
+}
+
 export function setStatus(statusEl, statusText, state, text) {
   statusEl.className = 'status ' + state;
   statusText.textContent = text;

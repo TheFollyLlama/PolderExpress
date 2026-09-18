@@ -344,7 +344,7 @@ class AmsAtcLayerTests(TestCase):
         self.assertIsNone(self._layer(52.6, 4.9, "ground", ground_speed_knots=20))
 
     def test_tower_band_uses_tower(self):
-        layer = self._layer(52.309, 4.764, 1200)
+        layer = self._layer(52.309, 4.764, 400)
         self.assertEqual(layer["stream_url"], AMS_TOWER_STREAM)
         self.assertEqual(layer["frequency"], "135.110")
 
@@ -484,9 +484,16 @@ class ParseAcTests(TestCase):
 
     def test_missing_position_gives_null_distances(self):
         parsed = _parse_ac({}, 33.4, -84.4)
+        self.assertIsNone(parsed["lat"])
+        self.assertIsNone(parsed["lon"])
         self.assertIsNone(parsed["distance_km"])
         self.assertIsNone(parsed["bearing"])
         self.assertIsNone(parsed["liveatc_stream_url"])
+
+    def test_exposes_plane_position(self):
+        parsed = _parse_ac({"hex": "abc123", "lat": 33.02, "lon": -85.21}, 33.4, -84.4)
+        self.assertEqual(parsed["lat"], 33.02)
+        self.assertEqual(parsed["lon"], -85.21)
 
     def test_distance_is_rounded_to_three_decimals(self):
         parsed = _parse_ac(
@@ -525,6 +532,8 @@ class FetchNearbyPlanesTests(TestCase):
         self.assertEqual(result["user_lon"], -84.4)
         self.assertTrue(result["fetched_at"].endswith("Z"))
         self.assertEqual(result["planes"][0]["callsign"], "DAL441")
+        self.assertEqual(result["planes"][0]["lat"], 33.02)
+        self.assertEqual(result["planes"][0]["lon"], -85.21)
 
     @mock.patch("tracker.services.requests.get")
     def test_filters_aircraft_without_hex(self, mock_get):
@@ -644,6 +653,8 @@ class NearbyPlanesViewTests(TestCase):
                     "callsign": "DAL441",
                     "tail_number": "N919AT",
                     "hex_id": "acb82c",
+                    "lat": 33.6,
+                    "lon": -84.3,
                     "distance_km": 86.4,
                     "bearing": 242.0,
                     "altitude_ft": 14425,
@@ -673,6 +684,8 @@ class NearbyPlanesViewTests(TestCase):
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         mock_fetch.assert_called_once_with(33.4, -84.4, 15)
         self.assertEqual(response.data["count"], 1)
+        self.assertEqual(response.data["planes"][0]["lat"], 33.6)
+        self.assertEqual(response.data["planes"][0]["lon"], -84.3)
 
     def test_missing_fields_returns_400(self):
         response = self.client.post(self.url, {"lat": 33.4}, format="json")
@@ -978,6 +991,8 @@ class ClosestPlaneViewTests(TestCase):
                 "callsign": "TRA75U",
                 "tail_number": "PH-TFN",
                 "hex_id": "484e32",
+                "lat": 51.42,
+                "lon": 4.18,
                 "distance_km": 12.04,
                 "bearing": 200.0,
                 "altitude_ft": 37000,
@@ -1034,6 +1049,8 @@ class ClosestPlaneViewTests(TestCase):
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         mock_fetch.assert_called_once_with(33.4, -84.4, 15)
         self.assertEqual(response.data["plane"]["callsign"], "TRA75U")
+        self.assertEqual(response.data["plane"]["lat"], 51.42)
+        self.assertEqual(response.data["plane"]["lon"], 4.18)
         self.assertEqual(response.data["plane"]["route"]["destination_iata"], "AMS")
 
     @mock.patch("tracker.views.fetch_closest_plane")
@@ -1092,6 +1109,8 @@ class RouteSerializationTests(TestCase):
             "callsign": "TRA75U",
             "tail_number": None,
             "hex_id": "484e32",
+            "lat": None,
+            "lon": None,
             "distance_km": 12.04,
             "bearing": None,
             "altitude_ft": 37000,
@@ -1117,6 +1136,19 @@ class RouteSerializationTests(TestCase):
     def test_plane_serializer_null_route(self):
         serialized = PlaneSerializer(self._plane_data(None)).data
         self.assertIsNone(serialized["route"])
+
+    def test_plane_serializer_null_position(self):
+        serialized = PlaneSerializer(self._plane_data(None)).data
+        self.assertIsNone(serialized["lat"])
+        self.assertIsNone(serialized["lon"])
+
+    def test_plane_serializer_exposes_position(self):
+        data = self._plane_data(None)
+        data["lat"] = 51.42
+        data["lon"] = 4.18
+        serialized = PlaneSerializer(data).data
+        self.assertEqual(serialized["lat"], 51.42)
+        self.assertEqual(serialized["lon"], 4.18)
 
     def test_plane_serializer_liveatc_frequency(self):
         data = self._plane_data(None)
